@@ -45,7 +45,6 @@ type Table struct {
 	storage    []kvtype
 	locks      [N_LOCKS]int32
 	hashpower  uint
-	cheatmap   map[keytype]valuetype // hee.  Getting the tests working for now.
 	bucketMask uint64
 	// For hashing
 	crcTab *crc64.Table
@@ -67,7 +66,6 @@ func NewTablePowerOfTwo(twopower uint) *Table {
 	// associative buckets conceptually, so the hashpower differs
 	// from the storage size.
 	t.storage = make([]kvtype, 1<<twopower)
-	t.cheatmap = make(map[keytype]valuetype)
 	t.crcTab = crc64.MakeTable(crc64.ECMA)
 	return t
 }
