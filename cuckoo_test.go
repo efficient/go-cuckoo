@@ -93,7 +93,7 @@ func TestRunningNearFull(t *testing.T) {
 		k, _ := keyAndValue(i)
 		ct.Delete(k)
 		fatalIfFound(t, ct, i)
-		k2, v2 := keyAndValue(i+limit)
+		k2, v2 := keyAndValue(i + limit)
 		ct.Put(k2, v2)
 		fatalIfNotFound(t, ct, i+limit)
 	}
@@ -126,8 +126,7 @@ func BenchmarkFill(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for j := 0; j < limit; j++ {
 			k, v := keyAndValue(j)
-			ct.Put(k,v)
+			ct.Put(k, v)
 		}
 	}
 }
-

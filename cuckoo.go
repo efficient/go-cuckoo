@@ -234,7 +234,7 @@ func (t *Table) Delete(k keytype) error {
 		log.Println("Delete of not-found key, return appropriate error message")
 		return nil
 	}
-	buck := bucket*SLOTS_PER_BUCKET+uint64(slot)
+	buck := bucket*SLOTS_PER_BUCKET + uint64(slot)
 	t.storage[buck].keyhash = 0
 	t.storage[buck].key = nil
 	t.storage[buck].value = nil
