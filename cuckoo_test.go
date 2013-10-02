@@ -14,7 +14,7 @@ func keyAndValue(i int) (key keytype, value valuetype) {
 }
 
 // Helper function to populate the table
-func fillTable(t *testing.T, ct *Table, limit int) {
+func fillTable(ct *Table, limit int) {
 	for i := 0; i < limit; i++ {
 		k, v := keyAndValue(i)
 		ct.Put(k, v)
@@ -56,7 +56,7 @@ func TestNewTable(t *testing.T) {
 func TestBasic(t *testing.T) {
 	ct := NewTable()
 	nKeys := 1000
-	fillTable(t, ct, nKeys)
+	fillTable(ct, nKeys)
 	validateFound(t, ct, 0, nKeys, "TestBasic")
 }
 
@@ -65,14 +65,14 @@ func TestFill(t *testing.T) {
 	// Should be able to hold at least 950 elements, but will have to
 	// cuckoo a lot to fill those last bits.  Stress test the cuckooing.
 	limit := 874 // 875 fails - we're not BFS'ing well enough yet
-	fillTable(t, ct, limit)
+	fillTable(ct, limit)
 	validateFound(t, ct, 0, limit, "TestFill")
 }
 
 func TestDelete(t *testing.T) {
 	ct := NewTable()
 	limit := 1000
-	fillTable(t, ct, limit)
+	fillTable(ct, limit)
 	validateFound(t, ct, 0, limit, "TestDelete")
 	for i := 0; i < limit; i++ {
 		k, _ := keyAndValue(i)
@@ -86,7 +86,7 @@ func TestRunningNearFull(t *testing.T) {
 	ct := NewTablePowerOfTwo(10)
 	tn := "TestRunningNearFull"
 	limit := 800
-	fillTable(t, ct, limit)
+	fillTable(ct, limit)
 	validateFound(t, ct, 0, limit, tn)
 	for i := 0; i < 10000; i++ {
 		fatalIfNotFound(t, ct, i)
@@ -120,7 +120,7 @@ func BenchmarkFillMap(b *testing.B) {
 	}
 }
 
-func BenchmarkFill(b *testing.B) {
+func BenchmarkFillCuckoo(b *testing.B) {
 	ct := NewTablePowerOfTwo(20)
 	limit := 1<<19 + 1<<18
 	for i := 0; i < b.N; i++ {

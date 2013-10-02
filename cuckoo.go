@@ -103,12 +103,12 @@ func (t *Table) tryBucketRead(k keytype, keyhash uint64, bucket uint64) (valuety
 }
 
 func (t Table) hasSpace(bucket uint64) (bool, int) {
-	storageOffset := bucket * 4
-	buckets := t.storage[storageOffset : storageOffset+4]
-	for i, b := range buckets {
-		if b.keyhash == 0 {
+	storageOffset := bucket * SLOTS_PER_BUCKET
+	for i := 0; i < SLOTS_PER_BUCKET; i++ {
+		if t.storage[storageOffset].keyhash == 0 {
 			return true, i
 		}
+		storageOffset++
 	}
 	return false, 0
 }
