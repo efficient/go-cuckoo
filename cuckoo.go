@@ -20,16 +20,16 @@ import (
 	//"time"
 	//"sync/atomic"
 	"fmt"
-	"log"
 	"hash/crc64" // xxx - use city eventually.
+	"log"
 )
 
 const (
-	SLOTS_PER_BUCKET = 4 // This is kinda hardcoded all over the place
+	SLOTS_PER_BUCKET    = 4  // This is kinda hardcoded all over the place
 	DEFAULT_START_POWER = 16 // 2^16 keys to start with.
-	N_LOCKS = 2048
-	MAX_REACH = 500 // number of buckets to examine before full
-	MAX_PATH_DEPTH = 5 // must be ceil(log4(MAX_REACH))
+	N_LOCKS             = 2048
+	MAX_REACH           = 500 // number of buckets to examine before full
+	MAX_PATH_DEPTH      = 5   // must be ceil(log4(MAX_REACH))
 )
 
 type keytype string
@@ -37,15 +37,15 @@ type valuetype string
 
 type kvtype struct {
 	keyhash uint64
-	key *keytype
-	value *valuetype
+	key     *keytype
+	value   *valuetype
 }
 
 type Table struct {
-	storage []kvtype
-	locks [N_LOCKS]int32
-	hashpower uint
-	cheatmap map[keytype]valuetype // hee.  Getting the tests working for now.
+	storage    []kvtype
+	locks      [N_LOCKS]int32
+	hashpower  uint
+	cheatmap   map[keytype]valuetype // hee.  Getting the tests working for now.
 	bucketMask uint64
 	// For hashing
 	crcTab *crc64.Table
@@ -56,8 +56,8 @@ func NewTable() *Table {
 }
 
 func (t *Table) sizeTable(twopower uint) {
-	t.hashpower = twopower-2
-	t.bucketMask = (1<<t.hashpower)-1
+	t.hashpower = twopower - 2
+	t.bucketMask = (1 << t.hashpower) - 1
 }
 
 func NewTablePowerOfTwo(twopower uint) *Table {
@@ -73,27 +73,27 @@ func NewTablePowerOfTwo(twopower uint) *Table {
 }
 
 func (t *Table) getKeyhash(k keytype) uint64 {
-	return ((1<<63) | crc64.Checksum([]byte(k), t.crcTab))
+	return ((1 << 63) | crc64.Checksum([]byte(k), t.crcTab))
 }
 
 var _ = fmt.Println
 var _ = log.Fatal
 
 func (t *Table) altIndex(bucket, keyhash uint64) uint64 {
-	tag := (keyhash & 0xff)+1
-	return (bucket ^ (tag*0x5bd1e995)) & t.bucketMask
+	tag := (keyhash & 0xff) + 1
+	return (bucket ^ (tag * 0x5bd1e995)) & t.bucketMask
 }
 
-func (t *Table) indexes(keyhash uint64) (i1, i2 uint64){
-	tag := (keyhash & 0xff)+1;
-	i1 = (keyhash >> 8)  & t.bucketMask
-	i2 = (i1 ^ (tag*0x5bd1e995)) & t.bucketMask
+func (t *Table) indexes(keyhash uint64) (i1, i2 uint64) {
+	tag := (keyhash & 0xff) + 1
+	i1 = (keyhash >> 8) & t.bucketMask
+	i2 = (i1 ^ (tag * 0x5bd1e995)) & t.bucketMask
 	return
 }
 
 func (t *Table) tryBucketRead(k keytype, keyhash uint64, bucket uint64) (valuetype, bool) {
-	storageOffset := bucket*4
-	buckets := t.storage[storageOffset:storageOffset+4]
+	storageOffset := bucket * 4
+	buckets := t.storage[storageOffset : storageOffset+4]
 	for _, b := range buckets {
 		if b.keyhash == keyhash {
 			if *b.key == k {
@@ -104,9 +104,9 @@ func (t *Table) tryBucketRead(k keytype, keyhash uint64, bucket uint64) (valuety
 	return valuetype(0), false
 }
 
-func (t Table)hasSpace(bucket uint64) (bool, int) {
-	storageOffset := bucket*4
-	buckets := t.storage[storageOffset:storageOffset+4]
+func (t Table) hasSpace(bucket uint64) (bool, int) {
+	storageOffset := bucket * 4
+	buckets := t.storage[storageOffset : storageOffset+4]
 	for i, b := range buckets {
 		if b.keyhash == 0 {
 			return true, i
@@ -132,14 +132,14 @@ func (t *Table) Get(k keytype) (v valuetype, found bool) {
 	if !found {
 		fmt.Printf("key %s not found.  Indexes %d and %d\n", string(k), i1, i2)
 	}
-		
+
 	return
 }
 
 type pathEnt struct {
-	bucket uint64
-	depth int
-	parent int
+	bucket     uint64
+	depth      int
+	parent     int
 	parentslot int
 }
 
@@ -160,28 +160,28 @@ func (t *Table) slotSearchBFS(i1, i2 uint64) (success bool, path [MAX_PATH_DEPTH
 		queue_head++
 		//log.Printf("BFS examining %v ", candidate)
 		if hasit, where := t.hasSpace(candidate.bucket); hasit {
-			// log.Printf("BFS found space at bucket %d slot %d (parent %d slot %d)   candidate: %v", 
+			// log.Printf("BFS found space at bucket %d slot %d (parent %d slot %d)   candidate: %v",
 			// 	candidate.bucket, where, candidate.parent, candidate.parentslot, candidate)
 			cd := candidate.depth
-			path[candidate.depth] = candidate.bucket*SLOTS_PER_BUCKET+uint64(where)
+			path[candidate.depth] = candidate.bucket*SLOTS_PER_BUCKET + uint64(where)
 			//log.Printf("path %d = %v", candidate.depth, path[candidate.depth])
 			parentslot := candidate.parentslot
 			for i := 0; i < cd; i++ {
 				candidate = queue[candidate.parent]
-				path[candidate.depth] = candidate.bucket*SLOTS_PER_BUCKET+uint64(parentslot)
+				path[candidate.depth] = candidate.bucket*SLOTS_PER_BUCKET + uint64(parentslot)
 				parentslot = candidate.parentslot
 				//log.Printf("path %d = %v  (%v)", candidate.depth, path[candidate.depth], candidate)
 			}
 			return true, path, cd
 		} else {
-			bStart := candidate.bucket*SLOTS_PER_BUCKET
+			bStart := candidate.bucket * SLOTS_PER_BUCKET
 			for i := 0; queue_tail < MAX_REACH && i < SLOTS_PER_BUCKET; i++ {
-				buck := bStart+uint64(i)
+				buck := bStart + uint64(i)
 				kh := t.storage[buck].keyhash
 				ai := t.altIndex(candidate.bucket, kh)
 				//log.Printf("  enqueue %d (%d) ((%v)) - %d", candidate.bucket, buck, *t.storage[buck].key, ai)
 				queue[queue_tail].bucket = ai
-				queue[queue_tail].depth = candidate.depth+1
+				queue[queue_tail].depth = candidate.depth + 1
 				queue[queue_tail].parent = candidate_pos
 				queue[queue_tail].parentslot = i
 				queue_tail++
@@ -189,7 +189,7 @@ func (t *Table) slotSearchBFS(i1, i2 uint64) (success bool, path [MAX_PATH_DEPTH
 		}
 	}
 	return false, path, 0
-	
+
 }
 
 func (t *Table) swap(x, y uint64) {
@@ -203,7 +203,6 @@ func (t *Table) swap(x, y uint64) {
 	//log.Printf("  after %v and %v", t.storage[x], t.storage[y])
 }
 
-
 func (t *Table) Put(k keytype, v valuetype) error {
 	keyhash := t.getKeyhash(k)
 	i1, i2 := t.indexes(keyhash)
@@ -214,7 +213,7 @@ func (t *Table) Put(k keytype, v valuetype) error {
 	} else {
 		//log.Printf("BFSing for %v indexes %d %d\n", k, i1, i2)
 		found, path, depth := t.slotSearchBFS(i1, i2)
-		if (!found) {
+		if !found {
 			panic("Crap, table really full, search failed")
 		}
 		for i := depth; i > 0; i-- {

@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
-	// Nothing yet
-	)
+
+// Nothing yet
+)
 
 func TestNewTable(t *testing.T) {
 	ct := NewTable()
@@ -23,7 +24,7 @@ func TestBasic(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		istr := strconv.Itoa(i)
 		v, found := ct.Get(keytype(istr))
-		if (!found) {
+		if !found {
 			t.Fatal("Could not find key", istr)
 		}
 		vs := string(v)
@@ -37,7 +38,7 @@ func TestFill(t *testing.T) {
 	ct := NewTablePowerOfTwo(10)
 	// Should be able to hold at least 950 elements, but will have to
 	// cuckoo a lot to fill those last bits.  Stress test the cuckooing.
-		limit := 874 // 875 fails - we're not BFS'ing well enough yet
+	limit := 874 // 875 fails - we're not BFS'ing well enough yet
 	for i := 0; i < limit; i++ {
 		istr := strconv.Itoa(i)
 		ct.Put(keytype(istr), valuetype(fmt.Sprintf("testvalue-%d", i)))
@@ -45,7 +46,7 @@ func TestFill(t *testing.T) {
 	for i := 0; i < limit; i++ {
 		istr := strconv.Itoa(i)
 		v, found := ct.Get(keytype(istr))
-		if (!found) {
+		if !found {
 			t.Fatal("Could not find key", istr)
 		}
 		vs := string(v)
