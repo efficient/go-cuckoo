@@ -20,7 +20,7 @@ import (
 	//"time"
 	//"sync/atomic"
 	"fmt"
-	//"log"
+	"log"
 	"hash/crc64" // xxx - use city eventually.
 )
 
@@ -29,6 +29,7 @@ const (
 	DEFAULT_START_POWER = 16 // 2^16 keys to start with.
 	N_LOCKS = 2048
 	MAX_REACH = 500 // number of buckets to examine before full
+	MAX_PATH_DEPTH = 5 // must be ceil(log4(MAX_REACH))
 )
 
 type keytype string
@@ -76,6 +77,7 @@ func (t *Table) getKeyhash(k keytype) uint64 {
 }
 
 var _ = fmt.Println
+var _ = log.Fatal
 
 func (t *Table) altIndex(bucket, keyhash uint64) uint64 {
 	tag := (keyhash & 0xff)+1
@@ -124,9 +126,13 @@ func (t *Table) Get(k keytype) (v valuetype, found bool) {
 	keyhash := t.getKeyhash(k)
 	i1, i2 := t.indexes(keyhash)
 	v, found = t.tryBucketRead(k, keyhash, i1)
-	if (!found) {
+	if !found {
 		v, found = t.tryBucketRead(k, keyhash, i2)
 	}
+	if !found {
+		fmt.Printf("key %s not found.  Indexes %d and %d\n", string(k), i1, i2)
+	}
+		
 	return
 }
 
@@ -137,7 +143,7 @@ type pathEnt struct {
 	parentslot int
 }
 
-func (t *Table) slotSearchBFS(i1, i2 uint64) (success bool, path [4]uint64, depth int) {
+func (t *Table) slotSearchBFS(i1, i2 uint64) (success bool, path [MAX_PATH_DEPTH]uint64, depth int) {
 	var queue [500]pathEnt
 	queue_head := 0
 	queue_tail := 0
@@ -154,20 +160,22 @@ func (t *Table) slotSearchBFS(i1, i2 uint64) (success bool, path [4]uint64, dept
 		queue_head++
 		//log.Printf("BFS examining %v ", candidate)
 		if hasit, where := t.hasSpace(candidate.bucket); hasit {
-			//log.Printf("BFS found space at bucket %d slot %d (parent %d)", 
-			//candidate.bucket, where, candidate.parent)
+			// log.Printf("BFS found space at bucket %d slot %d (parent %d slot %d)   candidate: %v", 
+			// 	candidate.bucket, where, candidate.parent, candidate.parentslot, candidate)
 			cd := candidate.depth
 			path[candidate.depth] = candidate.bucket*SLOTS_PER_BUCKET+uint64(where)
 			//log.Printf("path %d = %v", candidate.depth, path[candidate.depth])
+			parentslot := candidate.parentslot
 			for i := 0; i < cd; i++ {
 				candidate = queue[candidate.parent]
-				path[candidate.depth] = candidate.bucket*SLOTS_PER_BUCKET+uint64(candidate.parentslot)
-				//log.Printf("path %d = %v", candidate.depth, path[candidate.depth])
+				path[candidate.depth] = candidate.bucket*SLOTS_PER_BUCKET+uint64(parentslot)
+				parentslot = candidate.parentslot
+				//log.Printf("path %d = %v  (%v)", candidate.depth, path[candidate.depth], candidate)
 			}
 			return true, path, cd
 		} else {
 			bStart := candidate.bucket*SLOTS_PER_BUCKET
-			for i := 0; i < SLOTS_PER_BUCKET; i++ {
+			for i := 0; queue_tail < MAX_REACH && i < SLOTS_PER_BUCKET; i++ {
 				buck := bStart+uint64(i)
 				kh := t.storage[buck].keyhash
 				ai := t.altIndex(candidate.bucket, kh)
@@ -187,7 +195,10 @@ func (t *Table) slotSearchBFS(i1, i2 uint64) (success bool, path [4]uint64, dept
 func (t *Table) swap(x, y uint64) {
 	// Needs to be made conditional on matching the path for the
 	// concurrent version...
-		//log.Printf("swap %d to %d  (now: %v and %v)\n", x, y, t.storage[x], t.storage[y])
+	// xkey, ykey := "none", "none"
+	// if t.storage[x].key != nil { xkey = string(*t.storage[x].key) }
+	// if t.storage[y].key != nil { ykey = string(*t.storage[y].key) }
+	//log.Printf("swap %d to %d  (keys %v and %v)  (now: %v and %v)\n", x, y, xkey, ykey, t.storage[x], t.storage[y])
 	t.storage[x], t.storage[y] = t.storage[y], t.storage[x]
 	//log.Printf("  after %v and %v", t.storage[x], t.storage[y])
 }
