@@ -21,16 +21,28 @@ func fillTable(t *testing.T, ct *Table, limit int) {
 	}
 }
 
+func fatalIfNotFound(t *testing.T, ct *Table, i int) {
+	k, v := keyAndValue(i)
+	foundVal, found := ct.Get(k)
+	if !found {
+		t.Fatalf("failed - item %v not present", k)
+	}
+	if v != foundVal {
+		t.Fatalf("failed - item %v value incorrect, wanted %v got %v", k, v, foundVal)
+	}
+}
+
+func fatalIfFound(t *testing.T, ct *Table, i int) {
+	k, _ := keyAndValue(i)
+	foundVal, found := ct.Get(k)
+	if found {
+		t.Fatalf("failed - item %v not deleted, value %v", k, foundVal)
+	}
+}
+
 func validateFound(t *testing.T, ct *Table, start int, limit int, testName string) {
 	for i := start; i < limit; i++ {
-		k, wantedValue := keyAndValue(i)
-		v, found := ct.Get(k)
-		if !found {
-			t.Fatal(testName, "could not find key", k)
-		}
-		if v != wantedValue {
-			t.Fatalf(testName, "wrong value, expected %v got %v", i, wantedValue, v)
-		}
+		fatalIfNotFound(t, ct, i)
 	}
 }
 
@@ -65,10 +77,24 @@ func TestDelete(t *testing.T) {
 	for i := 0; i < limit; i++ {
 		k, _ := keyAndValue(i)
 		ct.Delete(k)
-		foundVal, found := ct.Get(k)
-		if found {
-			t.Fatalf("TestDelete failed - item %v still present as %v", k, foundVal)
-		}
+		fatalIfFound(t, ct, i)
 		validateFound(t, ct, i+1, limit, "TestDelete")
+	}
+}
+
+func TestRunningNearFull(t *testing.T) {
+	ct := NewTablePowerOfTwo(10)
+	tn := "TestRunningNearFull"
+	limit := 800
+	fillTable(t, ct, limit)
+	validateFound(t, ct, 0, limit, tn)
+	for i := 0; i < 10000; i++ {
+		fatalIfNotFound(t, ct, i)
+		k, _ := keyAndValue(i)
+		ct.Delete(k)
+		fatalIfFound(t, ct, i)
+		k2, v2 := keyAndValue(i+limit)
+		ct.Put(k2, v2)
+		fatalIfNotFound(t, ct, i+limit)
 	}
 }
