@@ -70,6 +70,5 @@ func TestDelete(t *testing.T) {
 			t.Fatalf("TestDelete failed - item %v still present as %v", k, foundVal)
 		}
 		validateFound(t, ct, i+1, limit, "TestDelete")
-
 	}
 }

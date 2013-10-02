@@ -89,17 +89,17 @@ func (t *Table) indexes(keyhash uint64) (i1, i2 uint64) {
 	return
 }
 
-func (t *Table) tryBucketRead(k keytype, keyhash uint64, bucket uint64) (valuetype, bool) {
+func (t *Table) tryBucketRead(k keytype, keyhash uint64, bucket uint64) (valuetype, bool, int) {
 	storageOffset := bucket * 4
 	buckets := t.storage[storageOffset : storageOffset+4]
-	for _, b := range buckets {
+	for i, b := range buckets {
 		if b.keyhash == keyhash {
 			if *b.key == k {
-				return *b.value, true
+				return *b.value, true, i
 			}
 		}
 	}
-	return valuetype(0), false
+	return valuetype(0), false, 0
 }
 
 func (t Table) hasSpace(bucket uint64) (bool, int) {
@@ -123,9 +123,9 @@ func (t Table) insert(k keytype, v valuetype, keyhash uint64, bucket uint64, slo
 func (t *Table) Get(k keytype) (v valuetype, found bool) {
 	keyhash := t.getKeyhash(k)
 	i1, i2 := t.indexes(keyhash)
-	v, found = t.tryBucketRead(k, keyhash, i1)
+	v, found, slot = t.tryBucketRead(k, keyhash, i1)
 	if !found {
-		v, found = t.tryBucketRead(k, keyhash, i2)
+		v, found, slot = t.tryBucketRead(k, keyhash, i2)
 	}
 	if !found {
 		fmt.Printf("key %s not found.  Indexes %d and %d\n", string(k), i1, i2)
@@ -224,6 +224,20 @@ func (t *Table) Put(k keytype, v valuetype) error {
 }
 
 func (t *Table) Delete(k keytype) error {
-	// notimpl
+	keyhash := t.getKeyhash(k)
+	i1, i2 := t.indexes(keyhash)
+
+	bucket, v, found, slot := i1, t.tryBucketRead(k, keyhash, i1)
+	if !found {
+		bucket, v, found, slot := t.tryBucketRead(k, keyhash, i2)
+	}
+	if !found {
+		log.Println("Delete of not-found key, return appropriate error message")
+		return nil
+	}
+	buck := bucket*SLOTS_PER_BUCKET+uint64(slot)
+	t.storage[buck].keyhash = 0
+	t.storage[key].keyhash = nil
+	t.storage[value].keyhash = nil
 	return nil
 }
