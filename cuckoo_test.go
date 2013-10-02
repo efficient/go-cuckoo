@@ -21,8 +21,8 @@ func fillTable(t *testing.T, ct *Table, limit int) {
 	}
 }
 
-func validateFound(t *testing.T, ct *Table, limit int, testName string) {
-	for i := 0; i < limit; i++ {
+func validateFound(t *testing.T, ct *Table, start int, limit int, testName string) {
+	for i := start; i < limit; i++ {
 		k, wantedValue := keyAndValue(i)
 		v, found := ct.Get(k)
 		if !found {
@@ -45,7 +45,7 @@ func TestBasic(t *testing.T) {
 	ct := NewTable()
 	nKeys := 1000
 	fillTable(t, ct, nKeys)
-	validateFound(t, ct, nKeys, "TestBasic")
+	validateFound(t, ct, 0, nKeys, "TestBasic")
 }
 
 func TestFill(t *testing.T) {
@@ -54,9 +54,22 @@ func TestFill(t *testing.T) {
 	// cuckoo a lot to fill those last bits.  Stress test the cuckooing.
 	limit := 874 // 875 fails - we're not BFS'ing well enough yet
 	fillTable(t, ct, limit)
-	validateFound(t, ct, limit, "TestFill")
+	validateFound(t, ct, 0, limit, "TestFill")
 }
 
 func TestDelete(t *testing.T) {
+	ct := NewTable()
+	limit := 1000
+	fillTable(t, ct, limit)
+	validateFound(t, ct, 0, limit, "TestDelete")
+	for i := 0; i < limit; i++ {
+		k, _ := keyAndValue(i)
+		ct.Delete(k)
+		foundVal, found := ct.Get(k)
+		if found {
+			t.Fatalf("TestDelete failed - item %v still present as %v", k, foundVal)
+		}
+		validateFound(t, ct, i+1, limit, "TestDelete")
 
+	}
 }
