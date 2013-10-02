@@ -1,12 +1,38 @@
 package cuckoo
 
 import (
-	"fmt"
 	"strconv"
 	"testing"
-
-// Nothing yet
 )
+
+// Standardizing our entry formats
+func keyAndValue(i int) (key keytype, value valuetype) {
+	keystr := strconv.Itoa(i)
+	key = keytype(keystr)
+	value = valuetype("testvalue-" + keystr)
+	return
+}
+
+// Helper function to populate the table
+func fillTable(t *testing.T, ct *Table, limit int) {
+	for i := 0; i < limit; i++ {
+		k, v := keyAndValue(i)
+		ct.Put(k, v)
+	}
+}
+
+func validateFound(t *testing.T, ct *Table, limit int, testName string) {
+	for i := 0; i < limit; i++ {
+		k, wantedValue := keyAndValue(i)
+		v, found := ct.Get(k)
+		if !found {
+			t.Fatal(testName, "could not find key", k)
+		}
+		if v != wantedValue {
+			t.Fatalf(testName, "wrong value, expected %v got %v", i, wantedValue, v)
+		}
+	}
+}
 
 func TestNewTable(t *testing.T) {
 	ct := NewTable()
@@ -17,21 +43,9 @@ func TestNewTable(t *testing.T) {
 
 func TestBasic(t *testing.T) {
 	ct := NewTable()
-	for i := 0; i < 1000; i++ {
-		istr := strconv.Itoa(i)
-		ct.Put(keytype(istr), valuetype(fmt.Sprintf("testvalue-%d", i)))
-	}
-	for i := 0; i < 1000; i++ {
-		istr := strconv.Itoa(i)
-		v, found := ct.Get(keytype(istr))
-		if !found {
-			t.Fatal("Could not find key", istr)
-		}
-		vs := string(v)
-		if vs != fmt.Sprintf("testvalue-%d", i) {
-			t.Fatalf("Wrong value, expected testvalue-%d got %s", i, vs)
-		}
-	}
+	nKeys := 1000
+	fillTable(t, ct, nKeys)
+	validateFound(t, ct, nKeys, "TestBasic")
 }
 
 func TestFill(t *testing.T) {
@@ -39,19 +53,10 @@ func TestFill(t *testing.T) {
 	// Should be able to hold at least 950 elements, but will have to
 	// cuckoo a lot to fill those last bits.  Stress test the cuckooing.
 	limit := 874 // 875 fails - we're not BFS'ing well enough yet
-	for i := 0; i < limit; i++ {
-		istr := strconv.Itoa(i)
-		ct.Put(keytype(istr), valuetype(fmt.Sprintf("testvalue-%d", i)))
-	}
-	for i := 0; i < limit; i++ {
-		istr := strconv.Itoa(i)
-		v, found := ct.Get(keytype(istr))
-		if !found {
-			t.Fatal("Could not find key", istr)
-		}
-		vs := string(v)
-		if vs != fmt.Sprintf("testvalue-%d", i) {
-			t.Fatalf("Wrong value, expected testvalue-%d got %s", i, vs)
-		}
-	}
+	fillTable(t, ct, limit)
+	validateFound(t, ct, limit, "TestFill")
+}
+
+func TestDelete(t *testing.T) {
+
 }

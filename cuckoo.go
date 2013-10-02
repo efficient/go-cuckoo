@@ -222,3 +222,8 @@ func (t *Table) Put(k keytype, v valuetype) error {
 	}
 	return nil
 }
+
+func (t *Table) Delete(k keytype) error {
+	// notimpl
+	return nil
+}
