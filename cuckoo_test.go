@@ -98,3 +98,36 @@ func TestRunningNearFull(t *testing.T) {
 		fatalIfNotFound(t, ct, i+limit)
 	}
 }
+
+func BenchmarkFillNull(b *testing.B) {
+	limit := 1<<19 + 1<<18
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < limit; j++ {
+			k, v := keyAndValue(j)
+			_, _ = k, v
+		}
+	}
+}
+
+func BenchmarkFillMap(b *testing.B) {
+	ct := make(map[string]string, 1<<20)
+	limit := 1<<19 + 1<<18
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < limit; j++ {
+			k, v := keyAndValue(j)
+			ct[string(k)] = string(v)
+		}
+	}
+}
+
+func BenchmarkFill(b *testing.B) {
+	ct := NewTablePowerOfTwo(20)
+	limit := 1<<19 + 1<<18
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < limit; j++ {
+			k, v := keyAndValue(j)
+			ct.Put(k,v)
+		}
+	}
+}
+
