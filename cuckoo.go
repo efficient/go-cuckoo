@@ -20,6 +20,7 @@ import (
 	//"time"
 	//"sync/atomic"
 	"fmt"
+	//"log"
 	"hash/crc64" // xxx - use city eventually.
 )
 
@@ -76,6 +77,11 @@ func (t *Table) getKeyhash(k keytype) uint64 {
 
 var _ = fmt.Println
 
+func (t *Table) altIndex(bucket, keyhash uint64) uint64 {
+	tag := (keyhash & 0xff)+1
+	return (bucket ^ (tag*0x5bd1e995)) & t.bucketMask
+}
+
 func (t *Table) indexes(keyhash uint64) (i1, i2 uint64){
 	tag := (keyhash & 0xff)+1;
 	i1 = (keyhash >> 8)  & t.bucketMask
@@ -124,14 +130,68 @@ func (t *Table) Get(k keytype) (v valuetype, found bool) {
 	return
 }
 
-// func (t *Table) slotSearchBFS(i1, i2 uint64) {
-// 	reach := 0
-// 	var path [4]uint64 // List of actual storage offsets
-// 	for depth := 0; depth < 4; depth++ {
-// 		if hasit, where := t.hasSpace(i1); hasit {
-			
-// 	}
-// }
+type pathEnt struct {
+	bucket uint64
+	depth int
+	parent int
+	parentslot int
+}
+
+func (t *Table) slotSearchBFS(i1, i2 uint64) (success bool, path [4]uint64, depth int) {
+	var queue [500]pathEnt
+	queue_head := 0
+	queue_tail := 0
+
+	queue[queue_tail].bucket = i1
+	queue_tail++
+
+	queue[queue_tail].bucket = i2
+	queue_tail++
+
+	for dfspos := 0; dfspos < MAX_REACH; dfspos++ {
+		candidate := queue[queue_head]
+		candidate_pos := queue_head
+		queue_head++
+		//log.Printf("BFS examining %v ", candidate)
+		if hasit, where := t.hasSpace(candidate.bucket); hasit {
+			//log.Printf("BFS found space at bucket %d slot %d (parent %d)", 
+			//candidate.bucket, where, candidate.parent)
+			cd := candidate.depth
+			path[candidate.depth] = candidate.bucket*SLOTS_PER_BUCKET+uint64(where)
+			//log.Printf("path %d = %v", candidate.depth, path[candidate.depth])
+			for i := 0; i < cd; i++ {
+				candidate = queue[candidate.parent]
+				path[candidate.depth] = candidate.bucket*SLOTS_PER_BUCKET+uint64(candidate.parentslot)
+				//log.Printf("path %d = %v", candidate.depth, path[candidate.depth])
+			}
+			return true, path, cd
+		} else {
+			bStart := candidate.bucket*SLOTS_PER_BUCKET
+			for i := 0; i < SLOTS_PER_BUCKET; i++ {
+				buck := bStart+uint64(i)
+				kh := t.storage[buck].keyhash
+				ai := t.altIndex(candidate.bucket, kh)
+				//log.Printf("  enqueue %d (%d) ((%v)) - %d", candidate.bucket, buck, *t.storage[buck].key, ai)
+				queue[queue_tail].bucket = ai
+				queue[queue_tail].depth = candidate.depth+1
+				queue[queue_tail].parent = candidate_pos
+				queue[queue_tail].parentslot = i
+				queue_tail++
+			}
+		}
+	}
+	return false, path, 0
+	
+}
+
+func (t *Table) swap(x, y uint64) {
+	// Needs to be made conditional on matching the path for the
+	// concurrent version...
+		//log.Printf("swap %d to %d  (now: %v and %v)\n", x, y, t.storage[x], t.storage[y])
+	t.storage[x], t.storage[y] = t.storage[y], t.storage[x]
+	//log.Printf("  after %v and %v", t.storage[x], t.storage[y])
+}
+
 
 func (t *Table) Put(k keytype, v valuetype) error {
 	keyhash := t.getKeyhash(k)
@@ -141,8 +201,16 @@ func (t *Table) Put(k keytype, v valuetype) error {
 	} else if hasSpace, where := t.hasSpace(i2); hasSpace {
 		t.insert(k, v, keyhash, i2, where)
 	} else {
-			//path := t.slotSearchBFS(i1, i2)
-		panic("Have to cuckoo, but this isn't implemented yet!")
+		//log.Printf("BFSing for %v indexes %d %d\n", k, i1, i2)
+		found, path, depth := t.slotSearchBFS(i1, i2)
+		if (!found) {
+			panic("Crap, table really full, search failed")
+		}
+		for i := depth; i > 0; i-- {
+			t.swap(path[i], path[i-1])
+		}
+		t.insert(k, v, keyhash, path[0]/4, int(path[0]%4))
+		//log.Printf("Insert at %d (now %v)", path[0], t.storage[path[0]])
 	}
 	return nil
 }
