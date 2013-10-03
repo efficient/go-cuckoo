@@ -20,7 +20,8 @@ import (
 	//"time"
 	//"sync/atomic"
 	"fmt"
-	"hash/crc64" // xxx - use city eventually.
+	"hash"
+	"hash/fnv" // xxx:  use city eventually.  This is a bottleneck for read
 	"log"
 )
 
@@ -46,8 +47,7 @@ type Table struct {
 	locks      [N_LOCKS]int32
 	hashpower  uint
 	bucketMask uint64
-	// For hashing
-	crcTab *crc64.Table
+	h          hash.Hash64
 }
 
 func NewTable() *Table {
@@ -66,12 +66,14 @@ func NewTablePowerOfTwo(twopower uint) *Table {
 	// associative buckets conceptually, so the hashpower differs
 	// from the storage size.
 	t.storage = make([]kvtype, 1<<twopower)
-	t.crcTab = crc64.MakeTable(crc64.ECMA)
+	t.h = fnv.New64a()
 	return t
 }
 
 func (t *Table) getKeyhash(k keytype) uint64 {
-	return ((1 << 63) | crc64.Checksum([]byte(k), t.crcTab))
+	t.h.Reset()
+	t.h.Write([]byte(k))
+	return ((1 << 63) | t.h.Sum64())
 }
 
 var _ = fmt.Println
@@ -90,14 +92,14 @@ func (t *Table) indexes(keyhash uint64) (i1, i2 uint64) {
 }
 
 func (t *Table) tryBucketRead(k keytype, keyhash uint64, bucket uint64) (valuetype, bool, int) {
-	storageOffset := bucket * 4
-	buckets := t.storage[storageOffset : storageOffset+4]
-	for i, b := range buckets {
-		if b.keyhash == keyhash {
-			if *b.key == k {
-				return *b.value, true, i
+	storageOffset := bucket * SLOTS_PER_BUCKET
+	for i := 0; i < SLOTS_PER_BUCKET; i++ {
+		if t.storage[storageOffset].keyhash == keyhash {
+			if *t.storage[storageOffset].key == k {
+				return *t.storage[storageOffset].value, true, i
 			}
 		}
+		storageOffset++
 	}
 	return valuetype(0), false, 0
 }
@@ -152,6 +154,7 @@ func (t *Table) slotSearchBFS(i1, i2 uint64) (success bool, path [MAX_PATH_DEPTH
 	for dfspos := 0; dfspos < MAX_REACH; dfspos++ {
 		candidate := queue[queue_head]
 		candidate_pos := queue_head
+		candidateParentBucket := queue[candidate.parent].bucket
 		queue_head++
 		//log.Printf("BFS examining %v ", candidate)
 		if hasit, where := t.hasSpace(candidate.bucket); hasit {
@@ -174,12 +177,14 @@ func (t *Table) slotSearchBFS(i1, i2 uint64) (success bool, path [MAX_PATH_DEPTH
 				buck := bStart + uint64(i)
 				kh := t.storage[buck].keyhash
 				ai := t.altIndex(candidate.bucket, kh)
-				//log.Printf("  enqueue %d (%d) ((%v)) - %d", candidate.bucket, buck, *t.storage[buck].key, ai)
-				queue[queue_tail].bucket = ai
-				queue[queue_tail].depth = candidate.depth + 1
-				queue[queue_tail].parent = candidate_pos
-				queue[queue_tail].parentslot = i
-				queue_tail++
+				if ai != candidateParentBucket {
+					//log.Printf("  enqueue %d (%d) ((%v)) - %d", candidate.bucket, buck, *t.storage[buck].key, ai)
+					queue[queue_tail].bucket = ai
+					queue[queue_tail].depth = candidate.depth + 1
+					queue[queue_tail].parent = candidate_pos
+					queue[queue_tail].parentslot = i
+					queue_tail++
+				}
 			}
 		}
 	}

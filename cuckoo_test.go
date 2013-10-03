@@ -130,3 +130,45 @@ func BenchmarkFillCuckoo(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkReadMap(b *testing.B) {
+	b.StopTimer()
+	ct := make(map[string]string, 1<<20)
+	limit := 1<<19 + 1<<18
+	keyarray := make([]string, limit)
+	for i := 0; i < limit; i++ {
+		k, v := keyAndValue(i)
+		ct[string(k)] = string(v)
+		keyarray[i] = string(k)
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < limit; j++ {
+			_, found := ct[keyarray[i]]
+			if !found {
+				b.Fatalf("Could not benchmark - key not found")
+			}
+		}
+	}
+}
+
+func BenchmarkReadCuckoo(b *testing.B) {
+	b.StopTimer()
+	ct := NewTablePowerOfTwo(20)
+	limit := 1<<19 + 1<<18
+	keyarray := make([]string, limit)
+	for i := 0; i < limit; i++ {
+		k, v := keyAndValue(i)
+		ct.Put(k, v)
+		keyarray[i] = string(k)
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < limit; j++ {
+			_, found := ct.Get(keytype(keyarray[i]))
+			if !found {
+				b.Fatalf("Could not benchmark - key not found")
+			}
+		}
+	}
+}
