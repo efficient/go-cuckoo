@@ -37,12 +37,12 @@ type keytype string
 type valuetype string
 
 type kvtype struct {
-	keyhash uint64
-	key     *keytype
-	value   *valuetype
+	key   keytype
+	value valuetype
 }
 
 type Table struct {
+	hashes     []uint64
 	storage    []kvtype
 	locks      [N_LOCKS]int32
 	hashpower  uint
@@ -66,6 +66,7 @@ func NewTablePowerOfTwo(twopower uint) *Table {
 	// associative buckets conceptually, so the hashpower differs
 	// from the storage size.
 	t.storage = make([]kvtype, 1<<twopower)
+	t.hashes = make([]uint64, 1<<twopower)
 	t.h = fnv.New64a()
 	return t
 }
@@ -94,9 +95,9 @@ func (t *Table) indexes(keyhash uint64) (i1, i2 uint64) {
 func (t *Table) tryBucketRead(k keytype, keyhash uint64, bucket uint64) (valuetype, bool, int) {
 	storageOffset := bucket * SLOTS_PER_BUCKET
 	for i := 0; i < SLOTS_PER_BUCKET; i++ {
-		if t.storage[storageOffset].keyhash == keyhash {
-			if *t.storage[storageOffset].key == k {
-				return *t.storage[storageOffset].value, true, i
+		if t.hashes[storageOffset] == keyhash {
+			if t.storage[storageOffset].key == k {
+				return t.storage[storageOffset].value, true, i
 			}
 		}
 		storageOffset++
@@ -107,7 +108,7 @@ func (t *Table) tryBucketRead(k keytype, keyhash uint64, bucket uint64) (valuety
 func (t Table) hasSpace(bucket uint64) (bool, int) {
 	storageOffset := bucket * SLOTS_PER_BUCKET
 	for i := 0; i < SLOTS_PER_BUCKET; i++ {
-		if t.storage[storageOffset].keyhash == 0 {
+		if t.hashes[storageOffset] == 0 {
 			return true, i
 		}
 		storageOffset++
@@ -116,10 +117,10 @@ func (t Table) hasSpace(bucket uint64) (bool, int) {
 }
 
 func (t Table) insert(k keytype, v valuetype, keyhash uint64, bucket uint64, slot int) {
-	b := &(t.storage[bucket*4+uint64(slot)])
-	b.keyhash = keyhash
-	b.key = &k
-	b.value = &v
+	storageOffset := bucket*SLOTS_PER_BUCKET + uint64(slot)
+	t.hashes[storageOffset] = keyhash
+	t.storage[storageOffset].key = k
+	t.storage[storageOffset].value = v
 }
 
 func (t *Table) Get(k keytype) (v valuetype, found bool) {
@@ -175,7 +176,7 @@ func (t *Table) slotSearchBFS(i1, i2 uint64) (success bool, path [MAX_PATH_DEPTH
 			bStart := candidate.bucket * SLOTS_PER_BUCKET
 			for i := 0; queue_tail < MAX_REACH && i < SLOTS_PER_BUCKET; i++ {
 				buck := bStart + uint64(i)
-				kh := t.storage[buck].keyhash
+				kh := t.hashes[buck]
 				ai := t.altIndex(candidate.bucket, kh)
 				if ai != candidateParentBucket {
 					//log.Printf("  enqueue %d (%d) ((%v)) - %d", candidate.bucket, buck, *t.storage[buck].key, ai)
@@ -200,6 +201,7 @@ func (t *Table) swap(x, y uint64) {
 	// if t.storage[y].key != nil { ykey = string(*t.storage[y].key) }
 	//log.Printf("swap %d to %d  (keys %v and %v)  (now: %v and %v)\n", x, y, xkey, ykey, t.storage[x], t.storage[y])
 	t.storage[x], t.storage[y] = t.storage[y], t.storage[x]
+	t.hashes[x], t.hashes[y] = t.hashes[y], t.hashes[x]
 	//log.Printf("  after %v and %v", t.storage[x], t.storage[y])
 }
 
@@ -240,8 +242,8 @@ func (t *Table) Delete(k keytype) error {
 		return nil
 	}
 	buck := bucket*SLOTS_PER_BUCKET + uint64(slot)
-	t.storage[buck].keyhash = 0
-	t.storage[buck].key = nil
-	t.storage[buck].value = nil
+	t.hashes[buck] = 0
+	t.storage[buck].key = keytype(0)
+	t.storage[buck].value = valuetype(0)
 	return nil
 }
