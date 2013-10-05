@@ -61,7 +61,7 @@ func (t *Table) sizeTable(twopower uint) {
 func NewTablePowerOfTwo(twopower uint) *Table {
 	t := &Table{}
 	t.sizeTable(twopower)
-	// storage holds items, but is organized into N/4 fully
+	// storage holds items, but is organized into N/SLOTS_PER_BUCKET fully
 	// associative buckets conceptually, so the hashpower differs
 	// from the storage size.
 	t.storage = make([]kvtype, 1<<twopower)
@@ -219,7 +219,7 @@ func (t *Table) Put(k keytype, v valuetype) error {
 		for i := depth; i > 0; i-- {
 			t.swap(path[i], path[i-1])
 		}
-		t.insert(k, v, keyhash, path[0]/4, int(path[0]%4))
+		t.insert(k, v, keyhash, path[0]/SLOTS_PER_BUCKET, int(path[0]%SLOTS_PER_BUCKET))
 		//log.Printf("Insert at %d (now %v)", path[0], t.storage[path[0]])
 	}
 	return nil
