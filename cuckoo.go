@@ -16,7 +16,6 @@
 package cuckoo
 
 import (
-	//"math/rand"
 	//"time"
 	//"sync/atomic"
 	"fmt"
@@ -107,11 +106,10 @@ func (t *Table) tryBucketRead(k keytype, keyhash uint64, bucket uint64) (valuety
 
 func (t Table) hasSpace(bucket uint64) (bool, int) {
 	storageOffset := bucket * SLOTS_PER_BUCKET
-	for i := 0; i < SLOTS_PER_BUCKET; i++ {
-		if t.hashes[storageOffset] == 0 {
+	for i, h := range t.hashes[storageOffset:storageOffset+SLOTS_PER_BUCKET] {
+		if h == 0 {
 			return true, i
 		}
-		storageOffset++
 	}
 	return false, 0
 }
